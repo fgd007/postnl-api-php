@@ -36,6 +36,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Dotenv\Dotenv;
 
 // Autoloader
@@ -116,25 +117,43 @@ The <info>generate:barcodes</info> command will generate multiple barcodes.
     <info>php console.php generate:barcodes --country=NL,DE --amount=3,5</info>
 ')
     ->setCode(function (InputInterface $input, OutputInterface $output) use ($postnl) {
-        $countries = explode(',', (string) $input->getOption('country'));
-        $amount = explode(',', (string) $input->getOption('amount'));
+        $io = new SymfonyStyle($input, $output);
+
+        $countries = (string) $input->getOption('country');
+        if (!strlen($countries)) {
+            $io->getErrorStyle()->error('Please specify at least one country.');
+
+            return 1;
+        }
+
+        $countries = explode(',', $countries);
+        $amounts = explode(',', (string) $input->getOption('amount'));
+
+        if (count($countries) !== count($amounts)) {
+            $io->getErrorStyle()->error('Amount of countries and amount of amounts do not match.');
+
+            return 1;
+        }
         $tableBarcodes = [];
         $first = true;
-        foreach ($postnl->generateBarcodesByCountryCodes(array_combine($countries, $amount)) as $country => $barcodes) {
+        $generatedBarcodes = $postnl->generateBarcodesByCountryCodes(array_combine($countries, $amounts));
+        foreach ($generatedBarcodes as $country => $barcodes) {
             if (!$first) {
                 $tableBarcodes[] = new TableSeparator();
             }
             $first = false;
             $tableBarcodes[] = [$country, implode("\n", $barcodes)];
         }
-        $output->writeln('These are the generated barcodes:');
-        $table = new Table($output);
+        $io->writeln('These are the generated barcodes:');
+        $table = new Table($io);
         $table->setStyle('borderless');
         $table
             ->setHeaders(['Country', 'Barcode(s)'])
             ->setRows($tableBarcodes)
         ;
         $table->render();
+
+        return 0;
     });
 
 $console->run();
